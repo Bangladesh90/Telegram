@@ -1,3 +1,8 @@
+from telebot import TeleBot, types
+from flask import Flask, request
+import os
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 
 
@@ -690,3 +695,67 @@ ul.profile-datablock {
 </body>
 
 </html>
+
+
+
+
+
+
+BOT_TOKEN = os.environ.get("8002325513:AAH3hQP4WSO5sSlfBWL0bRa6IY9j2mkTI0Y")
+bot = TeleBot(BOT_TOKEN)
+
+app = Flask(__name__)
+
+# Payment numbers
+BKASH_NUMBER = os.environ.get("01618523725")
+NAGAD_NUMBER = os.environ.get("01618523725")
+
+# Dictionary to track user status
+user_status = {}
+
+# Start / main menu
+@bot.message_handler(commands=['start'])
+def start(message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    withdraw_btn = types.KeyboardButton("Withdraw")
+    markup.add(withdraw_btn)
+    bot.send_message(message.chat.id, "Welcome! Choose an option:", reply_markup=markup)
+
+# Withdraw button clicked
+@bot.message_handler(func=lambda message: message.text == "Withdraw")
+def withdraw(message):
+    chat_id = message.chat.id
+    # Check if user already active
+    if user_status.get(chat_id, {}).get("active"):
+        bot.send_message(chat_id, f"Your account is active.\nSend withdraw amount (min 500 TK).")
+    else:
+        bot.send_message(chat_id, f"To withdraw, activate your account for 100 TK.\nSend 'Activate' to proceed.")
+
+# Activate command
+@bot.message_handler(func=lambda message: message.text.lower() == "activate")
+def activate(message):
+    chat_id = message.chat.id
+    user_status[chat_id] = {"active": True}
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(types.KeyboardButton("Send Payment Proof"))
+    bot.send_message(chat_id, f"Account activated ✅\nNow send payment proof screenshot.", reply_markup=markup)
+
+# Payment proof handler
+@bot.message_handler(content_types=['photo', 'document'])
+def handle_payment_proof(message):
+    chat_id = message.chat.id
+    if user_status.get(chat_id, {}).get("active"):
+        bot.send_message(chat_id, "Received your proof ✅\nYour withdraw request will be processed within 1 hour.")
+    else:
+        bot.send_message(chat_id, "You need to activate your account first. Send 'Activate'.")
+
+# Flask route for webhook (if needed)
+@app.route(f"/{BOT_TOKEN}", methods=['POST'])
+def webhook():
+    json_str = request.get_data().decode('utf-8')
+    update = types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return "!", 200
+
+if __name__ == "__main__":
+    bot.polling(none_stop=True)
